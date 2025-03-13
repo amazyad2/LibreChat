@@ -3,13 +3,13 @@
 
 services:
   api:
-    container_name: LibreChat
+    container_name: Cadmus
     ports:
       - "${PORT}:${PORT}"
     depends_on:
       - mongodb
       - rag_api
-    image: ghcr.io/danny-avila/librechat-dev:latest
+    image: amazyad/cadmus:v0.7.6-am1
     restart: always
     user: "${UID}:${GID}"
     extra_hosts:

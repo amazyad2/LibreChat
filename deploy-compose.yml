@@ -5,8 +5,8 @@ services:
     #   context: .
     #   dockerfile: Dockerfile.multi
     #   target: api-build
-    image: ghcr.io/danny-avila/librechat-dev-api:latest
-    container_name: LibreChat-API
+    image: amazyad/cadmus:v0.7.6-am1
+    container_name: Cadmus-API
     ports:
       - 3080:3080
     depends_on:
