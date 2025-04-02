@@ -9,7 +9,7 @@ services:
     depends_on:
       - mongodb
       - rag_api
-    image: amazyad/cadmus:v0.7.7-am1
+    image: amazyad/cadmus:latest
     restart: always
     user: "${UID}:${GID}"
     extra_hosts:

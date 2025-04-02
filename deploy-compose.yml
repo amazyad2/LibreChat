@@ -4,7 +4,7 @@ services:
     #   context: .
     #   dockerfile: Dockerfile.multi
     #   target: api-build
-    image: amazyad/cadmus:v0.7.7-am1
+    image: amazyad/cadmus:latest
     container_name: Cadmus-API
     ports:
       - 3080:3080
