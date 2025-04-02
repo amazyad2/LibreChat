@@ -294,7 +294,7 @@ class AgentClient extends BaseClient {
     }
 
     /** Note: Bedrock uses legacy RAG API handling */
-    if (this.message_file_map && !isAgentsEndpoint(this.options.endpoint)) {
+    if (this.message_file_map) {
       this.contextHandlers = createContextHandlers(
         this.options.req,
         orderedMessages[orderedMessages.length - 1].text,
