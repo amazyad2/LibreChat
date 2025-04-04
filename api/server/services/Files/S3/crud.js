@@ -16,6 +16,7 @@ const bucketName = process.env.AWS_BUCKET_NAME;
 const defaultBasePath = 'images';
 
 let s3UrlExpirySeconds = 7 * 24 * 60 * 60;
+let s3RefreshExpiryMs = null;
 
 if (process.env.S3_URL_EXPIRY_SECONDS !== undefined) {
   const parsed = parseInt(process.env.S3_URL_EXPIRY_SECONDS, 10);
@@ -25,6 +26,19 @@ if (process.env.S3_URL_EXPIRY_SECONDS !== undefined) {
   } else {
     logger.warn(
       `[S3] Invalid S3_URL_EXPIRY_SECONDS value: "${process.env.S3_URL_EXPIRY_SECONDS}". Using 7-day expiry.`,
+    );
+  }
+}
+
+if (process.env.S3_REFRESH_EXPIRY_MS !== null && process.env.S3_REFRESH_EXPIRY_MS) {
+  const parsed = parseInt(process.env.S3_REFRESH_EXPIRY_MS, 10);
+
+  if (!isNaN(parsed) && parsed > 0) {
+    s3RefreshExpiryMs = parsed;
+    logger.info(`[S3] Using custom refresh expiry time: ${s3RefreshExpiryMs}ms`);
+  } else {
+    logger.warn(
+      `[S3] Invalid S3_REFRESH_EXPIRY_MS value: "${process.env.S3_REFRESH_EXPIRY_MS}". Using default refresh logic.`,
     );
   }
 }
@@ -293,13 +307,51 @@ function needsRefresh(signedUrl, bufferSeconds) {
 
     // Check if it's close to expiration
     const now = new Date();
-    const bufferTime = new Date(now.getTime() + bufferSeconds * 1000);
 
+    // If S3_REFRESH_EXPIRY_MS is set, use it to determine if URL is expired
+    if (s3RefreshExpiryMs !== null) {
+      const urlCreationTime = dateObj.getTime();
+      const urlAge = now.getTime() - urlCreationTime;
+      return urlAge >= s3RefreshExpiryMs;
+    }
+
+    // Otherwise use the default buffer-based logic
+    const bufferTime = new Date(now.getTime() + bufferSeconds * 1000);
     return expiresAtDate <= bufferTime;
   } catch (error) {
     logger.error('Error checking URL expiration:', error);
     // If we can't determine, assume it needs refresh to be safe
     return true;
+  }
+}
+
+/**
+ * Generates a new URL for an expired S3 URL
+ * @param {string} currentURL - The current file URL
+ * @returns {Promise<string | undefined>}
+ */
+async function getNewS3URL(currentURL) {
+  try {
+    const s3Key = extractKeyFromS3Url(currentURL);
+    if (!s3Key) {
+      return;
+    }
+    const keyParts = s3Key.split('/');
+    if (keyParts.length < 3) {
+      return;
+    }
+
+    const basePath = keyParts[0];
+    const userId = keyParts[1];
+    const fileName = keyParts.slice(2).join('/');
+
+    return await getS3URL({
+      userId,
+      fileName,
+      basePath,
+    });
+  } catch (error) {
+    logger.error('Error getting new S3 URL:', error);
   }
 }
 
@@ -333,30 +385,15 @@ async function refreshS3FileUrls(files, batchUpdateFiles, bufferSeconds = 3600) 
       continue;
     }
     try {
-      const s3Key = extractKeyFromS3Url(file.filepath);
-      if (!s3Key) {
+      const newURL = await getNewS3URL(file.filepath);
+      if (!newURL) {
         continue;
       }
-      const keyParts = s3Key.split('/');
-      if (keyParts.length < 3) {
-        continue;
-      }
-
-      const basePath = keyParts[0];
-      const userId = keyParts[1];
-      const fileName = keyParts.slice(2).join('/');
-
-      const newUrl = await getS3URL({
-        userId,
-        fileName,
-        basePath,
-      });
-
       filesToUpdate.push({
         file_id: file.file_id,
-        filepath: newUrl,
+        filepath: newURL,
       });
-      files[i].filepath = newUrl;
+      files[i].filepath = newURL;
     } catch (error) {
       logger.error(`Error refreshing S3 URL for file ${file.file_id}:`, error);
     }
@@ -425,4 +462,6 @@ module.exports = {
   getS3FileStream,
   refreshS3FileUrls,
   refreshS3Url,
+  needsRefresh,
+  getNewS3URL,
 };
